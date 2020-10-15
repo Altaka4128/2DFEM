@@ -214,7 +214,6 @@ namespace _2DFEM
 
         }
 
-
         private DenseVector makePriStress(DenseVector stressvector)
         {
             // 例外処理

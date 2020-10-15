@@ -148,6 +148,125 @@ namespace _2DFEM
             DispVector = (DenseVector)(kMatrix.Inverse().Multiply(ForceVector));
             Console.WriteLine("変位ベクトル");
             Console.WriteLine(DispVector);
+
+            // 各要素の変位、応力ベクトルを計算する
+            DenseVector dispElemVector = DenseVector.Create(16, 0.0);
+            for (int i = 0; i < Elems.Count; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    dispElemVector[2 * j] = DispVector[2 * (Elems[i].Nodes[j].No - 1)];
+                    dispElemVector[2 * j + 1] = DispVector[2 * (Elems[i].Nodes[j].No - 1) + 1];
+                }
+
+                Console.WriteLine("要素" + (i + 1).ToString());
+                Elems[i].makeStrainVector(dispElemVector);
+                Elems[i].makeStressVector();
+
+                // 線形外挿法により各要素の節点応力を求める
+                Elems[i].makeNodeStressVector();
+            }
+
+            // 各節点の結果を算出する
+            List<ResultNode> resultNodes = new List<ResultNode>();
+            for (int i = 0; i < NodeNum; i++)
+            {
+                // 節点応力を計算する
+                ResultNode resultNode = new ResultNode();
+                resultNode.StressVector = DenseVector.Create(3, 0.0);
+                int NodeCount = 0;
+                for (int j = 0; j < Elems.Count; j++)
+                {
+                    for (int k = 0; k < 8; k++)
+                    {
+                        if (Elems[j].Nodes[k].No == (i + 1))
+                        {
+                            resultNode.StressVector += Elems[j].NodeStressVector[k];
+                            NodeCount++;
+                        }
+                    }
+                }
+                resultNode.StressVector /= (double)NodeCount;
+
+                // 変位を格納する
+                System.Windows.Vector displacement = new System.Windows.Vector();
+                displacement.X = DispVector[2 * i];
+                displacement.Y = DispVector[2 * i + 1];
+                resultNode.Displacement = displacement;
+
+                // 主応力、ミーゼス応力を計算する
+                resultNode.PriStressVector = makePriStress(resultNode.StressVector);
+                resultNode.MisesStress = makeMisesStress(resultNode.PriStressVector);
+
+                resultNodes.Add(resultNode);
+            }
+
+            // 結果を「output_quad8.csv」で出力する
+            FEMData2d data = new FEMData2d();
+            data.resultnodes = resultNodes;
+            data.WriteCSVFile("output_quad8.csv");
+
+            for (int i = 0; i < NodeNum; i++)
+            {
+                Console.WriteLine("節点" + (i + 1).ToString());
+                Console.WriteLine("節点応力ベクトル");
+                Console.WriteLine(resultNodes[i].StressVector);
+                Console.WriteLine("節点変位ベクトル");
+                Console.WriteLine(resultNodes[i].Displacement + "\n");
+                Console.WriteLine("主応力");
+                Console.WriteLine(resultNodes[i].PriStressVector);
+                Console.WriteLine("ミーゼス応力");
+                Console.WriteLine(resultNodes[i].MisesStress + "\n");
+            }
+        }
+
+
+        private DenseVector makePriStress(DenseVector stressvector)
+        {
+            // 例外処理
+            if (stressvector == null)
+            {
+                return null;
+            }
+
+            // 主応力を計算する
+            double[,] stressTensorArray = new double[2, 2];
+            stressTensorArray[0, 0] = stressvector[0];
+            stressTensorArray[1, 1] = stressvector[1];
+            stressTensorArray[0, 1] = stressvector[2];
+            stressTensorArray[1, 0] = stressTensorArray[0, 1];
+            DenseMatrix stressTensor = DenseMatrix.OfArray(stressTensorArray);
+            var evd = stressTensor.Evd();
+            var evdValue = evd.EigenValues;   // 固有値
+
+            Console.WriteLine("主応力");
+            Console.WriteLine(evdValue);
+
+            DenseVector evdVector = DenseVector.Create(2, 0.0);
+            evdVector[0] = evdValue[0].Real;
+            evdVector[1] = evdValue[1].Real;
+
+            return evdVector;
+
+        }
+
+        private double makeMisesStress(DenseVector pristressvector)
+        {
+            // 例外処理
+            if (pristressvector == null)
+            {
+                return 0.0;
+            }
+
+            double misesStress = new double();
+            misesStress = (pristressvector[0] * pristressvector[0] + pristressvector[1] * pristressvector[1] +
+                           (pristressvector[1] - pristressvector[0]) * (pristressvector[1] - pristressvector[0])) / 2.0;
+            misesStress = Math.Sqrt(misesStress);
+
+            Console.WriteLine("ミーゼス応力");
+            Console.WriteLine(misesStress + "\n");
+
+            return misesStress;
         }
     }
 }

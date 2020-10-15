@@ -35,11 +35,6 @@ namespace _2DFEM
             get;
             private set;
         }
-        public DenseVector AveStressVector   // 要素内の平均応力ベクトル
-        {
-            get;
-            private set;
-        }
         public override DenseVector[] NodeStressVector
         {
             get;
@@ -257,7 +252,7 @@ namespace _2DFEM
         }
 
 
-        public void makeAveStress()
+        public DenseVector makeAveStress()
         {
             // 各積分点の応力の合計値を計算する
             DenseVector sumStressVector = DenseVector.Create(3, 0.0);
@@ -266,16 +261,18 @@ namespace _2DFEM
                 // 例外処理
                 if (IntegralStressVector[i] == null)
                 {
-                    return;
+                    return null;
                 }
                 sumStressVector += IntegralStressVector[i];
             }
 
             // 平均値を計算する
-            AveStressVector = sumStressVector / (double)IntegralPoints;
+            DenseVector aveStressVector = sumStressVector / (double)IntegralPoints;
 
             Console.WriteLine("平均応力ベクトル");
-            Console.WriteLine(AveStressVector);
+            Console.WriteLine(aveStressVector);
+
+            return aveStressVector;
         }
 
         // 線形外挿法で節点応力を計算する
@@ -291,14 +288,14 @@ namespace _2DFEM
             }
 
             // 要素の平均応力を計算する
-            makeAveStress();
+            DenseVector aveStressVector = makeAveStress();
 
             // 各節点の応力を計算する(計算方法が合っているか要検討)
             double cof = Math.Sqrt(3);
-            NodeStressVector[0] = AveStressVector + cof * (IntegralStressVector[0] - AveStressVector);
-            NodeStressVector[1] = AveStressVector + cof * (IntegralStressVector[1] - AveStressVector);
-            NodeStressVector[2] = AveStressVector + cof * (IntegralStressVector[3] - AveStressVector);
-            NodeStressVector[3] = AveStressVector + cof * (IntegralStressVector[2] - AveStressVector);
+            NodeStressVector[0] = aveStressVector + cof * (IntegralStressVector[0] - aveStressVector);
+            NodeStressVector[1] = aveStressVector + cof * (IntegralStressVector[1] - aveStressVector);
+            NodeStressVector[2] = aveStressVector + cof * (IntegralStressVector[3] - aveStressVector);
+            NodeStressVector[3] = aveStressVector + cof * (IntegralStressVector[2] - aveStressVector);
 
             for(int i = 0; i < NodeNum; i++)
             {

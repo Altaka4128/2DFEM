@@ -24,13 +24,14 @@ namespace _2DFEM
         private DenseMatrix DMatrix;                                       // Dマトリックス
         private DenseMatrix[] BMatrix = new DenseMatrix[IntegralPoints];   // Bマトリックス
         private DenseMatrix[] JMatrix = new DenseMatrix[IntegralPoints];   // ヤコビ行列
-        private DenseMatrix KeMatrix;                                      // Keマトリックス 
-        public DenseVector StrainVector   // ひずみベクトル
+        private DenseMatrix KeMatrix;                                      // Keマトリックス
+
+        public DenseVector[] IntegralStrainVector   // ひずみベクトル
         {
             get;
             private set;
         }
-        public DenseVector StressVector   // 応力ベクトル
+        public DenseVector[] IntegralStressVector   // 応力ベクトル
         {
             get;
             private set;
@@ -54,6 +55,9 @@ namespace _2DFEM
             Thickness = thickness;
             Young = young;
             Poisson = poisson;
+            IntegralStrainVector = new DenseVector[IntegralPoints];
+            IntegralStressVector = new DenseVector[IntegralPoints];
+            NodeStressVector = new DenseVector[NodeNum];
 
             // ξ(定数)、η(定数)を初期化する
             double cof = Math.Sqrt(3.0 / 5.0);
@@ -294,20 +298,83 @@ namespace _2DFEM
 
         public override void makeStrainVector(DenseVector dispvector)
         {
+            for (int i = 0; i < IntegralPoints; i++)
+            {
+                IntegralStrainVector[i] = (DenseVector)BMatrix[i].Multiply(dispvector);
+                Console.WriteLine("積分点" + (i + 1) + "ひずみベクトル");
+                Console.WriteLine(IntegralStrainVector[i]);
+            }
         }
+
         public override void makeStressVector()
         {
+            for (int i = 0; i < IntegralPoints; i++)
+            {
+                // 例外処理
+                if (IntegralStrainVector[i] == null)
+                {
+                    return;
+                }
 
+                IntegralStressVector[i] = (DenseVector)DMatrix.Multiply(IntegralStrainVector[i]);
+                Console.WriteLine("積分点" + (i + 1) + "応力ベクトル");
+                Console.WriteLine(IntegralStressVector[i]);
+            }
         }
 
-        public void makeAveStress()
+        public DenseVector makeAveStress()
         {
+            // 各積分点の応力の合計値を計算する
+            DenseVector sumStressVector = DenseVector.Create(3, 0.0);
+            for (int i = 0; i < IntegralPoints; i++)
+            {
+                // 例外処理
+                if (IntegralStressVector[i] == null)
+                {
+                    return null;
+                }
+                sumStressVector += IntegralStressVector[i];
+            }
 
+            // 平均値を計算する
+            DenseVector aveStressVector = sumStressVector / (double)IntegralPoints;
+
+            Console.WriteLine("平均応力ベクトル");
+            Console.WriteLine(aveStressVector);
+
+            return aveStressVector;
         }
 
         public override void makeNodeStressVector()
         {
+            // 例外処理
+            for (int i = 0; i < NodeNum; i++)
+            {
+                if (IntegralStressVector[i] == null)
+                {
+                    return;
+                }
+            }
 
+            // 要素の平均応力を計算する
+            DenseVector aveStressVector = makeAveStress();
+
+            // 各節点の応力を計算する(計算方法が合っているか要検討)
+            double cof = Math.Sqrt(5.0 / 3.0);
+            NodeStressVector[0] = aveStressVector + cof * (IntegralStressVector[0] - aveStressVector);
+            NodeStressVector[1] = aveStressVector + cof * (IntegralStressVector[2] - aveStressVector);
+            NodeStressVector[2] = aveStressVector + cof * (IntegralStressVector[8] - aveStressVector);
+            NodeStressVector[3] = aveStressVector + cof * (IntegralStressVector[6] - aveStressVector);
+            NodeStressVector[4] = aveStressVector + cof * (IntegralStressVector[1] - aveStressVector);
+            NodeStressVector[5] = aveStressVector + cof * (IntegralStressVector[5] - aveStressVector);
+            NodeStressVector[6] = aveStressVector + cof * (IntegralStressVector[7] - aveStressVector);
+            NodeStressVector[7] = aveStressVector + cof * (IntegralStressVector[3] - aveStressVector);
+
+            for (int i = 0; i < NodeNum; i++)
+            {
+                Console.WriteLine("ノード番号" + (i + 1) + "節点応力");
+                Console.WriteLine(NodeStressVector[i]);
+            }
         }
     }
 }
